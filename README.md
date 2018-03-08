@@ -6,7 +6,7 @@ you home ip adress( your family ip address may change after you reboot your rout
 you should add ns type record, home.abc.com, set value is ns.abc.com(this must be domain,
 not a ip address), and you deploy this dns server program in in ns.abc.com.
 after you compile this program , two program generated, call dns and dsn_update,
-dns is dns server , and dsn_update is update client.
+dns is dns server , and dsn_update is update client. it currently support ipv4 only.
 
 
 # config
@@ -29,7 +29,7 @@ the param of client dsn_update
 
 in this case the command line should be:
 ```
-./dns_update ns.ab.com:20053  1Y8IZwoC home.abc.com
+./dns_update ns.abc.com:20053  1Y8IZwoC home.abc.com
 ```
 
 you should add dns_update client to crontab 
