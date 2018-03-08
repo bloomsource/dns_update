@@ -12,27 +12,30 @@ dns is dns server , and dsn_update is update client.
 # config
 ## server
 dns.cfg is server config file
-
+```
 [dns]
 
 port = 20053
 
 auth_key = 1Y8IZwoC
-
+```
 
 port this the udp port to receive client udp update, auth_key is authentication key of update command.
+this server must run as root, dns(udp) port is 53
 
 ## client
 the param of client dsn_update 
 ./dns_update server:port auth_key  domain
 
 in this case the command line should be:
+```
 ./dns_update ns.ab.com:20053  1Y8IZwoC home.abc.com
-
+```
 
 you should add dns_update client to crontab 
 
+```
 * * * * * /home/user/dns_update/dns_update.sh
-
+```
 
 
