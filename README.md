@@ -30,7 +30,9 @@ in this case the command line should be:
 ./dns_update ns.ab.com:20053  1Y8IZwoC home.abc.com
 
 
+you should add dns_update client to crontab 
 
+* * * * * /home/user/dns_update/dns_update.sh
 
 
 
