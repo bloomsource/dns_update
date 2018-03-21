@@ -274,11 +274,7 @@ void proc_dns_query( char* data, int len, char* ip, int port )
     
     write_log( "recv dns query from %-15s domain: %-20s type: %-3d class: %-3d", ip, domain, qry_type, qry_class );
     
-    if( qry_type != 1 || qry_class != 1 ) //ipv4 only
-    {
-        find = 0;
-        goto fill_rsp;
-    }
+
     
     node = (dns_node*)rbtree_find( &domains, domain );
     if( node )
@@ -286,7 +282,20 @@ void proc_dns_query( char* data, int len, char* ip, int port )
     else
         find = 0;
     
-    fill_rsp:
+    if( find == 0 )
+    {
+        write_log( "[WRN] domain %s not exist!", domain );
+        return;
+    }
+
+    if( qry_type != 1 || qry_class != 1 ) //ipv4 only
+    {
+        write_log( "[WRN] dns query type/class not support." );
+        find = 0;
+    }
+    
+    
+
     rsp.id = req.id;
     rsp.flags = 0;
     rsp.flags |= 0x8000;
