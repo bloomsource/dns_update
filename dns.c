@@ -51,11 +51,14 @@ int main( int argc, char* argv[] )
     
     strcpy( log_file, "dns.log" );
     
-    if( load_config() )
+    if( argc < 3 )
     {
-        printf( "load config failed!\n" );
+        printf( "usage:dns_srv port auth_key [user]\n" );
         return 1;
     }
+    
+    cmd_port = atoi( argv[1] );
+    snprintf( auth_key, sizeof(auth_key), "%s", argv[2] );
     
     dns_fd = udp_listen( NULL, DNS_PORT );
     if( dns_fd == -1 )
@@ -71,6 +74,16 @@ int main( int argc, char* argv[] )
         printf( "udp listen on dns port[%d] failed! err:%s\n", cmd_port, ERR );
         write_log( "[ERR] udp listen on dns port[%d] failed! err:%s", cmd_port, ERR );
         return 1;
+    }
+    
+    if( argc > 3 )
+    {
+        if( change_process_user( argv[3] ) )
+        {
+            printf( "process switch to user '%s' failed!\n", argv[3] );
+            write_log( "[ERR] process switch to user '%s' failed!", argv[3] );
+            return 1;
+        }
     }
     
     signal( SIGINT, sigproc );
@@ -227,7 +240,7 @@ void proc_dns_query( char* data, int len, char* ip, int port )
     {
         write_log( "recv dns data from %s:%d", ip, port );
         write_log_hex( data, len );
-        write_log( "[ERR] dns pack size too small, query abandon." );
+        write_log( "[WRN] dns pack size small, query abandon." );
         return;
     }
     
@@ -242,7 +255,7 @@ void proc_dns_query( char* data, int len, char* ip, int port )
     {
         write_log( "recv dns data from %s:%d", ip, port );
         write_log_hex( data, len );
-        write_log( "[ERR] dns query flag is not 1, query abandon." );
+        write_log( "[WRN] dns query flag is not 1, query abandon." );
         return;
     }
     
@@ -250,7 +263,7 @@ void proc_dns_query( char* data, int len, char* ip, int port )
     {
         write_log( "recv dns data from %s:%d", ip, port );
         write_log_hex( data, len );
-        write_log( "[ERR] dns query req cnt is not 1, query abandon." );
+        write_log( "[WRN] dns query req cnt is not 1, query abandon." );
         return;
     }
     
@@ -258,7 +271,7 @@ void proc_dns_query( char* data, int len, char* ip, int port )
     {
         write_log( "recv dns data from %s:%d", ip, port );
         write_log_hex( data, len );
-        write_log( "[ERR] dns ans_cnt not 0, query abandon." );
+        write_log( "[WRN] dns ans_cnt not 0, query abandon." );
         return;
     }
     
@@ -267,18 +280,14 @@ void proc_dns_query( char* data, int len, char* ip, int port )
     {
         write_log( "recv dns data from %s:%d", ip, port );
         write_log_hex( data, len );
-        write_log( "[ERR] dns query resolve domain failed, query abandon." );
+        write_log( "[WRN] dns query resolve domain failed, query abandon." );
         return ;
     }
     strlower( domain );
     
     write_log( "recv dns query from %-15s domain: %-20s type: %-3d class: %-3d", ip, domain, qry_type, qry_class );
     
-    if( qry_type != 1 || qry_class != 1 ) //ipv4 only
-    {
-        find = 0;
-        goto fill_rsp;
-    }
+
     
     node = (dns_node*)rbtree_find( &domains, domain );
     if( node )
@@ -286,7 +295,20 @@ void proc_dns_query( char* data, int len, char* ip, int port )
     else
         find = 0;
     
-    fill_rsp:
+    if( find == 0 )
+    {
+        write_log( "[WRN] domain %s not exist!", domain );
+        return;
+    }
+
+    if( qry_type != 1 || qry_class != 1 ) //ipv4 only
+    {
+        write_log( "[WRN] dns query type/class not support." );
+        find = 0;
+    }
+    
+    
+
     rsp.id = req.id;
     rsp.flags = 0;
     rsp.flags |= 0x8000;
@@ -407,7 +429,7 @@ int dns_resove_query( char* data, int len, char* domain, int* query_type, int* q
     
     if( left < 3+ 4 )
     {
-        write_log( "[ERR] query length not enough." );
+        write_log( "[WRN] query length not enough." );
         return 1;
     }
     
@@ -419,7 +441,7 @@ int dns_resove_query( char* data, int len, char* domain, int* query_type, int* q
         {
             if( namelen == 0 )
             {
-                write_log( "[ERR] domain length is 0" );
+                write_log( "[WRN] domain length is 0" );
                 return 1;
             }
             
@@ -436,19 +458,19 @@ int dns_resove_query( char* data, int len, char* domain, int* query_type, int* q
         namelen += ( seclen + 1 );
         if( namelen > 255 )
         {
-            write_log( "[ERR] domain name over length." );
+            write_log( "[WRN] domain name over length." );
             return 1;
         }
         
         if( seclen + 1 > left )
         {
-            write_log( "[ERR] domain name not enough length." );
+            write_log( "[WRN] domain name not enough length." );
             return 1;
         }
         
         if( check_domain_char( pdata+1, seclen ) )
         {
-            write_log( "[ERR] invalid domain char." );
+            write_log( "[WRN] invalid domain char." );
             return 1;
         }
         
@@ -461,12 +483,12 @@ int dns_resove_query( char* data, int len, char* domain, int* query_type, int* q
     
     if( namelen == 0 )
     {
-        write_log( "[ERR] domain name length is zero." );
+        write_log( "[WRN] domain name length is zero." );
     }
     
     if( left < sizeof(short)* 2 )
     {
-        write_log( "[ERR] query length is not enough." );
+        write_log( "[WRN] query length is not enough." );
         return 1;
     }
     
@@ -496,7 +518,7 @@ int dns_write_domain( char* data, int size, char* domain, int* write_len )
     left = size;
     if( strlen( domain ) > MAX_DOMAIN )
     {
-        write_log( "[ERR] write domain failed, domain name too large." );
+        write_log( "[WRN] write domain failed, domain name too large." );
         return -1;
     }
     
@@ -514,7 +536,7 @@ int dns_write_domain( char* data, int size, char* domain, int* write_len )
             seclen = p - pdomain;
             if( left <= seclen + 1 )
             {
-                write_log( "[ERR] write domain failed, space not enough." );
+                write_log( "[WRN] write domain failed, space not enough." );
                 return 1;
             }
             
@@ -530,7 +552,7 @@ int dns_write_domain( char* data, int size, char* domain, int* write_len )
             seclen = strlen( pdomain );
             if( left < seclen + 2 )
             {
-                write_log( "[ERR] write domain failed, space not enough." );
+                write_log( "[WRN] write domain failed, space not enough." );
                 return 1;
             }
             

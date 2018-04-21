@@ -88,97 +88,6 @@ int udp_recv( int fd, char* buf, int size, char* ip, int* port )
     return rc;
 }
 
-int cfg_get_value( const char* file, const char* section, const char* key, char* value )
-{
-    char line[1024],cursec[1024],tmp[1024];
-    char *p;
-    FILE* f;
-
-    f=fopen(file,"r");
-    if(f==NULL)
-        return -1;
-    cursec[0]=0;
-    
-    while( fgets( line, sizeof(line), f ) )
-    {
-        if( line[0] == '[' ) /* section */
-        {
-            p = strchr(line,']');
-            if( p == NULL)
-            {
-                continue;    
-            }
-            p[0] = 0;
-            strcpy( cursec, line+1 );
-        }
-        else if (line[0]=='#') /* commnet */
-            continue;
-        else
-        {
-            if( strcmp( section, cursec ) != 0 )
-                continue;
-            
-            while(line[strlen(line)-1]== ' ' || line[strlen(line)-1]== '\t' || line[strlen(line)-1]== '\r' || line[strlen(line)-1]== '\n')
-                line[strlen(line)-1]= 0;
-                
-            while( line[0]==' ' || line[0]=='\t' ) /* 去掉头部的空格 */
-            {
-                memmove( line, line+1, strlen(line)-1 );
-                line[strlen(line)-1]=0;
-            }
-            
-            if( strlen(line) == 0 )
-                continue;
-            
-            strcpy( tmp, line );
-            p = strchr( tmp, '=' );
-            if( p == NULL )
-                continue;
-            p[0] = 0;
-            
-            while( tmp[strlen(tmp)-1] == ' ' || tmp[strlen(tmp)-1] == '\t')
-                tmp[strlen(tmp)-1]=0;
-            if( strcmp(tmp,key) != 0 )
-                continue;
-            
-            /* 处理值 */
-            p = strchr( line, '=' );
-            strcpy( tmp, p+1 );
-            
-            while( tmp[0] == ' ' || tmp[0] == '\t') /* 去掉头部的空格 */
-            {
-                memmove( tmp, tmp+1, strlen(tmp)-1 );
-                tmp[strlen(tmp)-1]=0;
-            }
-            
-            if( tmp[0] == '"' )
-            {
-                memmove( tmp, tmp+1, strlen(tmp)-1 );
-                tmp[strlen(tmp)-1]=0;
-            }
-            
-            if( tmp[strlen(tmp)-1] == '"' )
-            {
-                    tmp[strlen(tmp)-1]=0;
-            }
-            /*
-            if(strlen(tmp)==0)
-            {
-                fclose(f);
-                return -1;
-            }
-            */
-            strcpy( value, tmp );
-            fclose( f );
-            return 0;
-        }
-    }
-    
-    fclose(f);
-    
-    return -1;
-}
-
 int resolve_host_ip( const char* host, char* ip )
 {
     struct hostent* ent;
@@ -271,30 +180,6 @@ int write_log_hex( char* buf, int buflen )
   return(0);
 }
 
-int load_config()
-{
-    char tmp[512];
-    
-    if( cfg_get_value( "dns.cfg", "dns", "port", tmp ))
-    {
-        printf( "load config [dns][port] failed!\n" );
-        return 1;
-    }
-    cmd_port = atoi( tmp );
-    
-    
-    if( cfg_get_value( "dns.cfg", "dns", "auth_key", tmp ))
-    {
-        printf( "load config [dns][auth_key] failed!\n" );
-        return 1;
-    }
-    snprintf( auth_key, sizeof(auth_key), "%s", tmp );
-    
-    
-    return 0;
-    
-}
-
 int hex2asc( char* hex, int len, char* buf, int buflen )
 {
     char bits[] = "0123456789abcdef";
@@ -328,5 +213,18 @@ char *strlower( char *s )
     return s;
 }
 
-
+int change_process_user( char* user )
+{
+    struct passwd *pw;
+    
+    pw = getpwnam( user );
+    if( !pw )
+        return -1;
+    
+    if( setuid( pw->pw_uid ) )
+        return -1;
+    
+    
+    return 0;
+}
 

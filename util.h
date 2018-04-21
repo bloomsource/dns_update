@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <poll.h>
+#include <pwd.h>
 #include <netdb.h>
 #include <sys/file.h>
 #include <sys/stat.h>
@@ -45,21 +46,17 @@ int udp_send( int fd, char* ip, int port, char* msg, int len );
 
 int udp_recv( int fd, char* buf, int size, char* ip, int* port );
 
-int cfg_get_value( const char* file, const char* section, const char* key, char* value );
-
 int resolve_host_ip( const char* host, char* ip );
 
 int write_log( const char* fmt, ... );
 
 int write_log_hex( char* buf, int buflen );
 
-int load_config();
-
 int hex2asc( char* hex, int len, char* buf, int buflen );
 
 char *strlower( char *s );
 
-
+int change_process_user( char* user );
 
 
 
