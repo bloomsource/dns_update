@@ -220,11 +220,13 @@ int change_process_user( char* user )
     pw = getpwnam( user );
     if( !pw )
         return -1;
+        
+    if( setgid(pw->pw_gid ) )
+        return -1;    
     
     if( setuid( pw->pw_uid ) )
         return -1;
-    
-    
+
     return 0;
 }
 
