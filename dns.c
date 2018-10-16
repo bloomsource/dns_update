@@ -576,46 +576,39 @@ int dns_write_domain( char* data, int size, char* domain, int* write_len )
 
 void proc_cmd( char* data, int len, char* ip, int port )
 {
-    cJSON *json_root, *json_time, *json_domain, *json_auth;
+    cJSON *json_root, *json_domain, *json_ip, *json_cmd;
     char buf[1024];
-    unsigned char sum[16];
-    char auth[32+1];
-    unsigned int now;
+    char json[1024];
+    int json_len;
     int ilen;
     char domain[MAX_DOMAIN+1];
     dns_node* node;
     
-    if( data[0] != '{' )
+    if( unpack_update_pkg( auth_key, TIME_DIFF, data, len ) )
     {
-        write_log( "[WRN] recv invalid cmd from %s:%d", ip, port );
+        write_log( "[WRN] recv invalid cmd pack!" );
+        write_log_hex( data, len );
         return;
     }
     
-    json_root = cJSON_Parse( data );
+    
+    json_root = cJSON_Parse( data + sizeof(upd_pack_hdr) );
     if( !json_root )
     {
         write_log( "[WRN] recv invalid json cmd from %s:%d, parse failed.", ip, port );
         return;
     }
     
-    json_time   = cJSON_GetObjectItem( json_root, "time" );
+    json_cmd    = cJSON_GetObjectItem( json_root, "cmd" );
     json_domain = cJSON_GetObjectItem( json_root, "domain" );
-    json_auth   = cJSON_GetObjectItem( json_root, "auth" );
+    json_ip     = cJSON_GetObjectItem( json_root, "ip" );
     
-    now = time( NULL );
     
-    if( !json_time || !json_domain || !json_auth )
+    if( !json_cmd || !json_domain )
     {
         write_log( "[WRN] recv invalid json cmd from %s:%d, missing elements.", ip, port );
         cJSON_Delete( json_root );
         return;
-    }
-    
-    if( abs( atoll( json_time->valuestring ) - now ) > 30 )
-    {
-        write_log( "[WRN] recv cmd out of time range from %s:%d", ip, port );
-        cJSON_Delete( json_root );
-        return ;
     }
     
     ilen = strlen( json_domain->valuestring );
@@ -625,28 +618,15 @@ void proc_cmd( char* data, int len, char* ip, int port )
         cJSON_Delete( json_root );
         return ;
     }
-    strcpy( domain, json_domain->valuestring );
+    snprintf( domain, sizeof(domain), "%s", json_domain->valuestring );
     
-    ilen = strlen( json_auth->valuestring );
-    if( ilen != 32 )
-    {
-        write_log( "[WRN] recv cmd domain over length from %s:%d", ip, port );
-        cJSON_Delete( json_root );
-        return ;
-    }
-    
-    snprintf( buf, sizeof(buf), "%lld%s%s", atoll( json_time->valuestring ), json_domain->valuestring, auth_key );
-    md5( (const unsigned char*)buf, strlen(buf), sum );
-    hex2asc( (char*)sum, 16, auth, 32 );
-    
-    if( strcmp( auth, json_auth->valuestring ) )
-    {
-        write_log( "[WRN] recv cmd auth failed from %s:%d", ip, port );
-        cJSON_Delete( json_root );
-        return ;
-    }
+
     
     strlower( domain );
+    
+    if( json_ip )
+        ip = json_ip->valuestring;
+    
     
     node = (dns_node*)rbtree_find( &domains, domain );
     if( !node )
@@ -655,8 +635,10 @@ void proc_cmd( char* data, int len, char* ip, int port )
         if( !node )
         {
             write_log( "[ERR] malloc memory for dns_node failed! err:%s", ERR );
-            strcpy( buf, "{ \"retcode\": 1, \"desc\":\"mallof failed!\" }" );
-            udp_send( cmd_fd, ip, port, buf, strlen(buf) );
+            strcpy( json, "{ \"retcode\": 1, \"desc\":\"mallof failed!\" }" );
+            json_len = strlen( json );
+            pack_update_pkg( auth_key, buf, json, json_len );
+            udp_send( cmd_fd, ip, port, buf, json_len + sizeof(upd_pack_hdr) );
             cJSON_Delete( json_root );
             return;
         }
@@ -684,9 +666,10 @@ void proc_cmd( char* data, int len, char* ip, int port )
     
     cJSON_Delete( json_root );
     
-    sprintf( buf, "{ \"retcode\":0, \"desc\": \"ok\" }" );
-    udp_send( cmd_fd, ip, port, buf, strlen(buf) );
-    
+    sprintf( json, "{ \"retcode\":0, \"desc\": \"ok\" }" );
+    json_len = strlen( json );
+    pack_update_pkg( auth_key, buf, json, json_len );
+    udp_send( cmd_fd, ip, port, buf, json_len + sizeof(upd_pack_hdr) );
     return;
     
 }

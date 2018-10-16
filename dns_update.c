@@ -5,23 +5,22 @@
 int fd;
 void usage()
 {
-    printf( "usage:dns_update server:port auth_key domain\n" );
+    printf( "usage:dns_update server:port auth_key domain [ip]\n" );
 }
 
 int main( int argc, char* argv[] )
 {
     int rc;
+    char json[1024];
     char buf[1024];
     char ip[16];
     int port;
-    unsigned char sum[16];
-    char auth[32+1];
-    unsigned int now;
+    int json_len;
     struct pollfd pfd;
     char* p;
     cJSON *json_root, *json_retcode;
     
-    if( argc != 4 )
+    if( argc < 4 )
     {
         usage();
         return 1;
@@ -64,16 +63,18 @@ int main( int argc, char* argv[] )
         return 1;
     }
     
-    now = time( NULL );
-    sprintf( buf, "%u%s%s", now, argv[3], auth_key );
+    if( argc > 4 )
+    {
+        sprintf( buf, ", \"ip\":\"%s\" ", argv[4] );
+    }
     
-    md5( (const unsigned char*)buf, strlen(buf), sum );
-    hex2asc( (char*)sum, 16, auth, 32 );
+    sprintf( json, "{ \"cmd\":\"update_domain\", \"domain\":\"%s\" %s }", argv[3], argc > 4 ? buf : " " );
     
-    sprintf( buf, "{ \"time\":\"%u\", \"domain\":\"%s\", \"auth\":\"%s\" }", now, argv[3], auth );
+    json_len = strlen( json );
+    pack_update_pkg( auth_key, buf, json, json_len );
     
-    rc = udp_send( fd, ip, cmd_port, buf, strlen( buf ) );
-    if( rc != strlen( buf ) )
+    rc = udp_send( fd, ip, cmd_port, buf, json_len + sizeof(upd_pack_hdr) );
+    if( rc != json_len + sizeof(upd_pack_hdr) )
     {
         printf( "send udp pack failed! err:%s\n", ERR );
         write_log( "[ERR] send udp pack failed! err:%s", ERR );
@@ -100,7 +101,15 @@ int main( int argc, char* argv[] )
     }
     buf[rc] = 0;
     
-    json_root = cJSON_Parse( buf );
+    if( unpack_update_pkg( auth_key, TIME_DIFF, buf, rc ) )
+    {
+        printf( "recv invalid response!\n" );
+        write_log( "[ERR] recv invalid response!" );
+        return 1;
+    }
+    
+        
+    json_root = cJSON_Parse( buf + sizeof(upd_pack_hdr) );
     if( !json_root )
     {
         printf( "parse response json failed!\n" );

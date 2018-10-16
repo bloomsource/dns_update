@@ -230,3 +230,151 @@ int change_process_user( char* user )
     return 0;
 }
 
+int crypto_derive_key(const char *pass, unsigned char *key, int key_len)
+{
+    int datal;
+    datal = strlen((const char *)pass);
+    md5_context ctx;
+
+
+
+    unsigned char md_buf[16];
+    int addmd;
+    unsigned int i, j, mds;
+
+    mds = 16;
+
+
+    for (j = 0, addmd = 0; j < key_len; addmd++) {
+        md5_starts(&ctx);
+        if (addmd) {
+            md5_update(&ctx, md_buf, mds);
+        }
+        md5_update(&ctx, (unsigned char *)pass, datal);
+        md5_finish(&ctx, &(md_buf[0]));
+
+        for (i = 0; i < mds; i++, j++) {
+            if (j >= key_len)
+                break;
+            key[j] = md_buf[i];
+        }
+    }
+
+
+    return key_len;
+}
+
+int pack_update_pkg( char* passwd, char* buf, char* msg, int msglen )
+{
+    aes_context ctx;
+    
+    upd_pack_hdr *hdr;
+    char tmp[1024];
+    unsigned char aes_key[32];
+    unsigned char iv[16];
+    unsigned int  checksum;
+    unsigned int  timestamp;
+    int offset = 0;
+    int left = msglen + sizeof(upd_pack_hdr);
+    int proc_len;
+    
+    int iv_off = 0;
+    
+    hdr = (upd_pack_hdr*)buf;
+    
+    crypto_derive_key( passwd, aes_key, 32 );
+    md5( (unsigned char*)passwd, strlen( passwd ), iv );
+    
+    timestamp = time( NULL );
+    hdr->time_stamp = htonl( timestamp );
+    hdr->checksum   = 0;
+    hdr->rnd        = rand();
+
+    memcpy( buf + sizeof(upd_pack_hdr), msg, msglen );
+    
+    checksum = crc32( 0, buf, sizeof(upd_pack_hdr) + msglen );
+    hdr->checksum = htonl( checksum );
+    aes_setkey_enc( &ctx, aes_key, 256 );
+    
+    while( left )
+    {
+        proc_len = left > sizeof(tmp) ? sizeof(tmp) : left;
+        
+        aes_crypt_cfb128( &ctx, AES_ENCRYPT, proc_len, &iv_off, iv, (unsigned char*)buf + offset, (unsigned char*)tmp );
+        memcpy( buf + offset, tmp, proc_len );
+        
+        left -= proc_len;
+        offset += proc_len;
+    }
+    
+    
+    return 0;
+
+}
+
+int unpack_update_pkg( char* passwd, int time_diff, char* pkg, int pkglen )
+{
+    aes_context ctx;
+    
+    upd_pack_hdr *hdr;
+    int offset = 0;
+    int left = pkglen;
+    int proc_len;    
+    char tmp[1024];
+    unsigned char aes_key[32];
+    unsigned char iv[16];
+    unsigned int  checksum;
+    unsigned int  curtime;
+    unsigned int  timestamp;
+    int iv_off = 0;
+    
+    
+    
+    if( pkglen < sizeof(upd_pack_hdr) + 1 )
+    {
+        write_log( "[WRN] update pack length too small!" );
+        return -1;
+    }
+    
+    crypto_derive_key( passwd, aes_key, 32 );
+    md5( (unsigned char*)passwd, strlen( passwd ), iv );
+    aes_setkey_enc( &ctx, aes_key, 256 );
+    
+    while( left )
+    {
+        proc_len = left > sizeof(tmp) ? sizeof(tmp) : left;
+        aes_crypt_cfb128( &ctx, AES_DECRYPT, proc_len, &iv_off, iv, (unsigned char*)pkg + offset, (unsigned char*)tmp );
+        
+        memcpy( pkg + offset, tmp, proc_len );
+        
+        left -= proc_len;
+        offset += proc_len;
+    }
+    
+    
+    
+    hdr = (upd_pack_hdr*)pkg;
+    
+    curtime = time( NULL );
+    timestamp = ntohl( hdr->time_stamp );
+    
+    checksum = ntohl( hdr->checksum );
+    hdr->checksum = 0;
+    
+    if( checksum != crc32( 0, pkg, pkglen ) )
+    {
+        write_log( "[WRN] update pack checksum incorrected!" );
+        return -1;
+    }
+    
+    if( abs( curtime - timestamp ) > time_diff )
+    {
+        write_log( "[WRN] update pack timestamp out of range!" );
+        return -1;
+    }
+    
+    return 0;
+    
+}
+
+

@@ -29,6 +29,11 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <sys/un.h>
+#include "md5.h"
+#include "aes.h"
+#include "crc32.h"
+
+#define TIME_DIFF  10
 
 #define ERR ( strerror( errno ) )
 
@@ -37,6 +42,11 @@ extern char server[100];
 extern int  cmd_port;
 extern char auth_key[100];
 
+typedef struct{
+    unsigned int rnd;
+    unsigned int checksum;
+    unsigned int time_stamp;
+}upd_pack_hdr;
 
 int udp_create();
 
@@ -58,6 +68,11 @@ char *strlower( char *s );
 
 int change_process_user( char* user );
 
+int crypto_derive_key(const char *pass, unsigned char *key, int key_len);
+
+int pack_update_pkg( char* passwd, char* buf, char* msg, int msglen );
+
+int unpack_update_pkg( char* passwd, int time_diff, char* pkg, int pkglen );
 
 
 
