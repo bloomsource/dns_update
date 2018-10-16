@@ -11,22 +11,18 @@ dns is dns server , and dsn_update is update client. it currently support ipv4 o
 
 # config
 ## server
-dns.cfg is server config file
-```
-[dns]
-
-port = 20053
-
-auth_key = 1Y8IZwoC
-```
 
 port this the udp port to receive client udp update, auth_key is authentication key of update command.
 this server must run as root, dns(udp) port is 53
 
 you can run server as 
 ```
-/home/user/dns_update/dns&
+/home/user/dns_update/dns_srv 20053 1Y8IZwoC user&
 ```
+
+the first parameter is command port, this will receive client update command.
+the second parameter is authentication key
+the third parameter is user name, after the server run as root, the process will change it's user to user.
 
 ## client
 the param of client dsn_update 
